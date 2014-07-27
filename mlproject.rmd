@@ -1,0 +1,87 @@
+Predicting Activity from sensor Data
+========================================================
+
+# Summary
+The goal of this exercise was to use sensory data collected from accelerometers on various body parts to determine the way a weight lifting exercise was performed. There were 6 male participants between the ages of 20-28, all with little weight lifting experience. They were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). We wanted to build a model that could predict the Class for collected data. A random forest model was used yielding very accurate results.
+
+(more on the data collection here: http://groupware.les.inf.puc-rio.br/har#ixzz38KdLkcYg)
+
+# Loading and Cleaning Data
+
+## Data Loading
+
+```{r cache=TRUE, echo =TRUE}
+# load dataset for training
+train_data <- read.csv2("pml-training.csv", sep=",", header = TRUE, na.strings = c("","NA"))
+# load dataset for testing
+test_data <- read.csv2("pml-testing.csv", sep=",", header=TRUE, na.strings=c("","NA"))
+```
+
+## Data Cleaning
+
+```{r cache=TRUE, echo=TRUE}
+# Inspect data
+str(train_data)
+
+# remove columns with more than 90% NAs and the first 7 columns which do not contain sensory data
+train_data <- train_data[,colSums(!is.na(train_data)) > 0.90*nrow(train_data)]
+train_data <- subset(train_data, select=-c(1:7))
+test_data <- test_data[,colSums(!is.na(test_data)) > 0.90*nrow(test_data)]
+test_data <- subset(test_data, select=-c(1:7))
+
+# turn factor variables into numeric data
+for ( i in 1:52) {
+        train_data[,i] <- as.numeric(as.character(train_data[,i]))
+        test_data[,i] <- as.numeric(as.character(test_data[,i]))
+        }
+```
+
+Split Training Data to Training and Cross-Validation to be used to determine the error estimate on the actual test data
+
+```{r echo=TRUE, cache=TRUE}
+# split training data-set into cross-validation and actual training
+library(caret)
+set.seed(1234)
+toTrain <- createDataPartition(train_data$classe, p = 0.60, list = FALSE)
+training <- train_data[toTrain,]
+validation <- train_data[-toTrain,]
+```
+
+# Creating model using "caret" and "randomForest" packages
+
+Since not too much was known about the features in the dataset and accuracy was a main concern, it seemed appropriate to use a random forest method to create a predictive model. A random forest will create a multitude of separate decision trees and the predictions will be made using the mode of the classes of the individual trees.
+
+```{r, echo=TRUE, cache=TRUE}
+library(randomForest)
+library(caret)
+
+fit <- train(classe~. , method="rf", data=training)
+# predict on the cross-validation dataset
+predictions <- predict(fit$finalModel, validation[,c(1:52)])
+percentage_correct <- sum(predictions == validation[,53])/nrow(validation)
+```
+
+# check correctness per class
+```{r echo=TRUE, cache=TRUE}
+As <- sum((predictions =="A") & (validation$classe == "A")) / sum(validation$classe == "A")
+Bs <- sum((predictions =="B") & (validation$classe == "B")) / sum(validation$classe == "B")
+Cs <- sum((predictions =="C") & (validation$classe == "C")) / sum(validation$classe == "C")
+Ds <- sum((predictions =="D") & (validation$classe == "D")) / sum(validation$classe == "D")
+Es <- sum((predictions =="E") & (validation$classe == "E")) / sum(validation$classe == "E")
+
+percentages <- c(As,Bs,Cs,Ds,Es)
+accuracy_table <- data.frame(percentages, classe=c("A","B","C","D","E"))
+names(accuracy_table) <- c("Correct_Percentage","Classe")
+accuracy_table
+```
+
+We can see from the table that the accuracy is not restricted on one classe case but the fitted model gives a good accuracy in all 5 classes.
+
+# Expected out of sample Error Rate
+Based on the cross-validation check, the expected out of sample Error Rate would be less than 2%. Since the out of sample error rate is typically higher than in the training set we can expect about 1 or 2 false predictions (5-10%) out of the 20 examples in the test set.
+
+# Actual Test Set Error Rate
+
+The actual Test Set Error Rate was 0%!
+
+
